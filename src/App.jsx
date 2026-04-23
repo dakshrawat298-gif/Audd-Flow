@@ -2,6 +2,7 @@ import './App.css';
 import { motion } from 'framer-motion';
 import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { useState } from 'react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
 export default function App() {
   const [active, setActive] = useState('home');
@@ -48,17 +49,9 @@ function Header() {
         </span>
       </div>
 
-      <motion.button
-        whileTap={{ scale: 0.94 }}
-        whileHover={{ scale: 1.02 }}
-        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-medium
-                   bg-white/5 border border-white/10 backdrop-blur-xl
-                   hover:border-cyan-neon/50 transition-colors
-                   shadow-[inset_0_0_20px_rgba(0,212,255,0.08)]"
-      >
-        <Wallet size={13} className="text-cyan-neon" />
-        <span className="text-white/90">Connect Wallet</span>
-      </motion.button>
+      <div className="audd-wallet-btn">
+        <WalletMultiButton startIcon={<Wallet size={13} className="text-cyan-neon" />} />
+      </div>
     </motion.header>
   );
 }

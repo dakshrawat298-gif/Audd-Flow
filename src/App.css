@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700&display=swap');
 
 html, body, #root {
   height: 100%;
@@ -98,4 +98,118 @@ html, body, #root {
 @keyframes float2 {
   0%,100% { transform: translate(0,0) scale(1); }
   50% { transform: translate(-40px, -60px) scale(1.15); }
+}
+
+/* ===== Override Solana WalletMultiButton to match glass theme ===== */
+.audd-wallet-btn .wallet-adapter-button {
+  background: rgba(255, 255, 255, 0.04) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  padding: 0 14px !important;
+  border-radius: 9999px !important;
+  box-shadow:
+    inset 0 0 20px rgba(0, 212, 255, 0.08),
+    0 0 0 0 rgba(0, 212, 255, 0);
+  transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+.audd-wallet-btn .wallet-adapter-button:not([disabled]):hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(0, 212, 255, 0.5) !important;
+  box-shadow:
+    inset 0 0 20px rgba(0, 212, 255, 0.12),
+    0 0 24px rgba(0, 212, 255, 0.18);
+}
+
+.audd-wallet-btn .wallet-adapter-button:active {
+  transform: scale(0.96);
+}
+
+.audd-wallet-btn .wallet-adapter-button-start-icon,
+.audd-wallet-btn .wallet-adapter-button-end-icon {
+  margin-right: 6px !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+.audd-wallet-btn .wallet-adapter-button-start-icon img,
+.audd-wallet-btn .wallet-adapter-button-end-icon img {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* Modal: dark glass */
+.wallet-adapter-modal-wrapper {
+  background: rgba(10, 10, 10, 0.85) !important;
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+  border-radius: 24px !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
+
+.wallet-adapter-modal-overlay {
+  background: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.wallet-adapter-modal-title {
+  color: #fff !important;
+  font-weight: 300 !important;
+  letter-spacing: -0.01em;
+}
+
+.wallet-adapter-modal-list {
+  margin: 0 0 8px !important;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 14px !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+.wallet-adapter-modal-list .wallet-adapter-button:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(0, 212, 255, 0.35) !important;
+}
+
+.wallet-adapter-modal-list-more {
+  color: rgba(0, 212, 255, 0.9) !important;
+}
+
+.wallet-adapter-dropdown-list {
+  background: rgba(10, 10, 10, 0.92) !important;
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 16px !important;
+  font-family: 'Inter', system-ui, sans-serif !important;
+}
+
+.wallet-adapter-dropdown-list-item {
+  border-radius: 10px !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.wallet-adapter-dropdown-list-item:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.wallet-adapter-modal-button-close {
+  background: rgba(255, 255, 255, 0.04) !important;
 }
