@@ -1,6 +1,6 @@
 import './App.css';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft, X } from 'lucide-react';
+import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft, X, QrCode, Copy, Check } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
@@ -33,6 +33,7 @@ export default function App() {
         </div>
 
         <SendSheetMount />
+        <DepositSheetMount />
       </div>
     </div>
   );
@@ -60,18 +61,28 @@ function Header() {
   );
 }
 
-// ----- Send sheet open/close shared across the app via a tiny event bus -----
-const sendSheetBus = {
-  listeners: new Set(),
-  open() { this.listeners.forEach((fn) => fn(true)); },
-  close() { this.listeners.forEach((fn) => fn(false)); },
-  subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
-};
+// ----- Tiny event bus factory for sheet open/close state -----
+function createSheetBus() {
+  const listeners = new Set();
+  return {
+    open: () => listeners.forEach((fn) => fn(true)),
+    close: () => listeners.forEach((fn) => fn(false)),
+    subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
+  };
+}
+const sendSheetBus = createSheetBus();
+const depositSheetBus = createSheetBus();
 
 function SendSheetMount() {
   const [isSendOpen, setIsSendOpen] = useState(false);
   useEffect(() => sendSheetBus.subscribe(setIsSendOpen), []);
   return <SendSheet isOpen={isSendOpen} onClose={() => setIsSendOpen(false)} />;
+}
+
+function DepositSheetMount() {
+  const [isDepositOpen, setIsDepositOpen] = useState(false);
+  useEffect(() => depositSheetBus.subscribe(setIsDepositOpen), []);
+  return <DepositSheet isOpen={isDepositOpen} onClose={() => setIsDepositOpen(false)} />;
 }
 
 function Dashboard() {
@@ -151,7 +162,7 @@ function Dashboard() {
         className="grid grid-cols-3 gap-3 mt-7"
       >
         {[
-          { label: 'Deposit', icon: ArrowDownLeft, color: 'text-cyan-neon', onClick: () => {} },
+          { label: 'Deposit', icon: ArrowDownLeft, color: 'text-cyan-neon', onClick: () => depositSheetBus.open() },
           { label: 'Send', icon: ArrowUpRight, color: 'text-purple-electric', onClick: () => sendSheetBus.open() },
           { label: 'Stream', icon: Radio, color: 'text-white', onClick: () => {} },
         ].map(({ label, icon: Icon, color, onClick }) => (
@@ -521,6 +532,174 @@ function SendSheet({ isOpen, onClose }) {
                 Hold to confirm · Devnet
               </p>
             )}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function DepositSheet({ isOpen, onClose }) {
+  const { publicKey } = useWallet();
+  const [copied, setCopied] = useState(false);
+  const address = publicKey?.toBase58() || '';
+
+  useEffect(() => {
+    if (!isOpen) {
+      const t = setTimeout(() => setCopied(false), 350);
+      return () => clearTimeout(t);
+    }
+  }, [isOpen]);
+
+  const handleCopy = async () => {
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+    } catch {
+      // Fallback for non-secure contexts
+      const ta = document.createElement('textarea');
+      ta.value = address;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            key="deposit-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            onClick={onClose}
+            className="absolute inset-0 z-30 bg-black/60 backdrop-blur-sm md:rounded-[44px]"
+          />
+
+          <motion.div
+            key="deposit-sheet"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 32, stiffness: 320, mass: 0.9 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.4 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+            }}
+            className="absolute bottom-0 left-0 right-0 z-40
+                       bg-[#0a0a0a]/90 backdrop-blur-2xl
+                       border-t border-white/10
+                       rounded-t-3xl
+                       shadow-[0_-30px_80px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)]
+                       px-6 pt-2.5 pb-7
+                       md:rounded-b-[44px]"
+          >
+            {/* Drag handle */}
+            <div className="flex justify-center pt-1 pb-3">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] text-white/40 font-medium">
+                  Treasury · Devnet
+                </p>
+                <h2 className="text-[22px] font-light tracking-tight text-white mt-1">
+                  Receive Funds
+                </h2>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={onClose}
+                className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </motion.button>
+            </div>
+
+            {/* QR placeholder */}
+            <div className="flex justify-center mb-5">
+              <div className="relative w-[210px] h-[210px] rounded-3xl
+                              bg-white/5 border border-cyan-neon/30
+                              backdrop-blur-2xl
+                              flex items-center justify-center
+                              shadow-[inset_0_0_40px_rgba(0,212,255,0.12),0_0_50px_rgba(0,212,255,0.18)]">
+                <QrCode
+                  size={150}
+                  strokeWidth={1.2}
+                  className="text-white/85 drop-shadow-[0_0_18px_rgba(0,212,255,0.55)]"
+                />
+                {/* Glow corners */}
+                <span className="absolute top-3 left-3 w-4 h-4 border-l-2 border-t-2 border-cyan-neon/70 rounded-tl-md" />
+                <span className="absolute top-3 right-3 w-4 h-4 border-r-2 border-t-2 border-cyan-neon/70 rounded-tr-md" />
+                <span className="absolute bottom-3 left-3 w-4 h-4 border-l-2 border-b-2 border-purple-electric/70 rounded-bl-md" />
+                <span className="absolute bottom-3 right-3 w-4 h-4 border-r-2 border-b-2 border-purple-electric/70 rounded-br-md" />
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="mb-6">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-white/40 font-medium text-center">
+                Your Wallet Address
+              </p>
+              <div className="mt-2.5 px-4 py-3 rounded-2xl bg-white/5 border border-white/10">
+                {address ? (
+                  <p className="text-[12px] text-white/85 font-light break-all text-center leading-relaxed select-all">
+                    {address}
+                  </p>
+                ) : (
+                  <p className="text-[12px] text-white/40 font-light text-center">
+                    Connect a wallet to view your address
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Copy button */}
+            <motion.button
+              whileTap={address ? { scale: 0.97 } : {}}
+              type="button"
+              onClick={handleCopy}
+              disabled={!address || copied}
+              className={`w-full h-14 rounded-2xl
+                         text-[15px] font-medium text-white
+                         border border-white/15
+                         shadow-[0_10px_40px_rgba(0,212,255,0.35),inset_0_1px_0_rgba(255,255,255,0.25)]
+                         transition-all duration-300
+                         disabled:cursor-not-allowed
+                         inline-flex items-center justify-center gap-2
+                         ${copied
+                           ? 'bg-gradient-to-r from-emerald-400/90 to-cyan-neon/90 shadow-[0_10px_40px_rgba(16,185,129,0.4)]'
+                           : !address
+                             ? 'bg-gradient-to-r from-cyan-neon/30 to-purple-electric/30 opacity-60'
+                             : 'bg-gradient-to-r from-cyan-neon/90 to-purple-electric/90 hover:shadow-[0_14px_50px_rgba(176,91,255,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]'}`}
+            >
+              {copied ? (
+                <>
+                  <Check size={16} />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy size={15} />
+                  Copy Address
+                </>
+              )}
+            </motion.button>
+
+            <p className="text-center text-[10px] text-white/30 mt-3.5 tracking-wide">
+              Solana · Devnet
+            </p>
           </motion.div>
         </>
       )}
