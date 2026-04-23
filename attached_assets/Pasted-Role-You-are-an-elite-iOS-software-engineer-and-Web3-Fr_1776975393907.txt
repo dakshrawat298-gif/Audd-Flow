@@ -1,0 +1,22 @@
+Role: You are an elite iOS software engineer and Web3 Frontend Architect from Apple.
+Task: Build the absolute highest-tier, ultra-premium mobile frontend for "Audd Flow" (A Web3 Treasury & Streaming Protocol). This is a strictly mobile-first design. The preview must look and feel exactly like a native 120Hz iOS application (no web-browser lag).
+
+Tech Stack to Install & Use:
+- react
+- tailwindcss (install this immediately for styling)
+- framer-motion (install this for buttery smooth, 60fps gesture and layout animations)
+- lucide-react (install this for sleek, minimalist Apple-style icons)
+
+Strict Aesthetic & UI Guidelines:
+1. Vibe: "Confidential, Expensive, and Futuristic".
+2. Colors: Deepest pitch black (bg-black) and absolute dark greys (bg-[#0a0a0a]). Accents must be a subtle Neon Cyan (#00d4ff) and Electric Purple (#b05bff), but only used for glowing elements or primary call-to-actions.
+3. The "Apple" Feel (Glassmorphism): Do NOT use solid colors for cards. All UI containers must be translucent using advanced Tailwind utilities (backdrop-blur-2xl bg-white/5 border border-white/10). Add very soft inner shadows to make them look like floating frosted glass.
+4. Typography: Use the 'Inter' font. Make numbers huge, glowing, and thin (light font weight).
+
+Components to Build (Iterative Step 1):
+Do not build the entire app at once. Start by replacing the default App.jsx with this exact structure:
+- A Dynamic Header: A glass-morphic top nav. Left side: "Audd Flow" text logo. Right side: A mock "Connect Wallet" button.
+- The Dashboard Screen: A massive, shimmering number displaying "$0.00 AUDD". Add a subtle framer-motion pulse effect to this text so it feels "alive."
+- Bottom Navigation Bar: A sticky, frosted-glass bottom bar with three iOS-style icons (Home, Send, Stream).
+
+Important Rule: Do not add real Solana or Phantom logic yet. Just build the static visual UI with hardcoded dummy data and ensure the Tailwind CSS and Framer Motion setup is completely bug-free. The UI must be flawless before we add Web3 logic.
