@@ -34,6 +34,7 @@ export default function App() {
 
         <SendSheetMount />
         <DepositSheetMount />
+        <StreamSheetMount />
       </div>
     </div>
   );
@@ -72,6 +73,26 @@ function createSheetBus() {
 }
 const sendSheetBus = createSheetBus();
 const depositSheetBus = createSheetBus();
+const streamSheetBus = createSheetBus();
+
+// ----- Active stream store (visual prototype only) -----
+const streamStore = {
+  stream: null, // { totalAmount, durationMs, startedAt, recipient }
+  listeners: new Set(),
+  start(stream) {
+    this.stream = stream;
+    this.listeners.forEach((fn) => fn(this.stream));
+  },
+  stop() {
+    this.stream = null;
+    this.listeners.forEach((fn) => fn(null));
+  },
+  subscribe(fn) {
+    this.listeners.add(fn);
+    fn(this.stream);
+    return () => this.listeners.delete(fn);
+  },
+};
 
 function SendSheetMount() {
   const [isSendOpen, setIsSendOpen] = useState(false);
@@ -83,6 +104,12 @@ function DepositSheetMount() {
   const [isDepositOpen, setIsDepositOpen] = useState(false);
   useEffect(() => depositSheetBus.subscribe(setIsDepositOpen), []);
   return <DepositSheet isOpen={isDepositOpen} onClose={() => setIsDepositOpen(false)} />;
+}
+
+function StreamSheetMount() {
+  const [isStreamOpen, setIsStreamOpen] = useState(false);
+  useEffect(() => streamSheetBus.subscribe(setIsStreamOpen), []);
+  return <StreamSheet isOpen={isStreamOpen} onClose={() => setIsStreamOpen(false)} />;
 }
 
 function Dashboard() {
@@ -164,7 +191,7 @@ function Dashboard() {
         {[
           { label: 'Deposit', icon: ArrowDownLeft, color: 'text-cyan-neon', onClick: () => depositSheetBus.open() },
           { label: 'Send', icon: ArrowUpRight, color: 'text-purple-electric', onClick: () => sendSheetBus.open() },
-          { label: 'Stream', icon: Radio, color: 'text-white', onClick: () => {} },
+          { label: 'Stream', icon: Radio, color: 'text-white', onClick: () => streamSheetBus.open() },
         ].map(({ label, icon: Icon, color, onClick }) => (
           <motion.button
             key={label}
@@ -179,56 +206,7 @@ function Dashboard() {
       </motion.div>
 
       {/* Stream stats card */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.7, duration: 0.7 }}
-        className="glass mt-5 rounded-3xl p-5"
-      >
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] uppercase tracking-[0.22em] text-white/40">
-            Active Streams
-          </span>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/60">
-            0 active
-          </span>
-        </div>
-
-        <div className="mt-4 flex items-end justify-between">
-          <div>
-            <p className="text-3xl font-thin tracking-tight text-white">
-              0.00<span className="text-white/40 text-base ml-1.5">/sec</span>
-            </p>
-            <p className="text-[11px] text-white/40 mt-1">Outflow rate</p>
-          </div>
-          <div className="text-right">
-            <p className="text-3xl font-thin tracking-tight text-glow-purple text-purple-electric">
-              0.00
-            </p>
-            <p className="text-[11px] text-white/40 mt-1">Inflow rate</p>
-          </div>
-        </div>
-
-        {/* Sparkline */}
-        <div className="mt-5 h-12 w-full">
-          <svg viewBox="0 0 300 50" className="w-full h-full" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="g" x1="0" x2="1">
-                <stop offset="0%" stopColor="#00d4ff" />
-                <stop offset="100%" stopColor="#b05bff" />
-              </linearGradient>
-            </defs>
-            <path
-              d="M0,35 C40,30 60,40 90,28 C120,16 150,38 180,24 C210,12 240,30 300,18"
-              fill="none"
-              stroke="url(#g)"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              opacity="0.85"
-            />
-          </svg>
-        </div>
-      </motion.div>
+      <ActiveStreamsCard />
 
       {/* Recent activity placeholder */}
       <motion.div
@@ -700,6 +678,333 @@ function DepositSheet({ isOpen, onClose }) {
             <p className="text-center text-[10px] text-white/30 mt-3.5 tracking-wide">
               Solana · Devnet
             </p>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function ActiveStreamsCard() {
+  const [stream, setStream] = useState(null);
+  const [streamed, setStreamed] = useState(0);
+
+  useEffect(() => streamStore.subscribe(setStream), []);
+
+  useEffect(() => {
+    if (!stream) {
+      setStreamed(0);
+      return;
+    }
+    const tick = () => {
+      const elapsed = Date.now() - stream.startedAt;
+      const ratio = Math.min(elapsed / stream.durationMs, 1);
+      setStreamed(stream.totalAmount * ratio);
+    };
+    tick();
+    const id = setInterval(tick, 100);
+    return () => clearInterval(id);
+  }, [stream]);
+
+  const isActive = !!stream;
+  const ratePerSec = stream ? stream.totalAmount / (stream.durationMs / 1000) : 0;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.7, duration: 0.7 }}
+      className="glass mt-5 rounded-3xl p-5"
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] uppercase tracking-[0.22em] text-white/40">
+          Active Streams
+        </span>
+        <motion.span
+          key={isActive ? 'on' : 'off'}
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', damping: 22, stiffness: 380 }}
+          className={`text-[10px] px-2 py-0.5 rounded-full border inline-flex items-center gap-1.5 ${
+            isActive
+              ? 'bg-cyan-neon/10 border-cyan-neon/30 text-cyan-neon'
+              : 'bg-white/5 border-white/10 text-white/60'
+          }`}
+        >
+          {isActive && (
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon animate-pulse" />
+          )}
+          {isActive ? '1 active' : '0 active'}
+        </motion.span>
+      </div>
+
+      <div className="mt-4 flex items-end justify-between">
+        <div>
+          <p className="text-3xl font-thin tracking-tight text-white tabular-nums">
+            {ratePerSec.toFixed(4)}
+            <span className="text-white/40 text-base ml-1.5">/sec</span>
+          </p>
+          <p className="text-[11px] text-white/40 mt-1">Outflow rate</p>
+        </div>
+        <div className="text-right">
+          <p className="text-3xl font-thin tracking-tight text-glow-purple text-purple-electric tabular-nums">
+            {streamed.toFixed(6)}
+          </p>
+          <p className="text-[11px] text-white/40 mt-1">
+            {isActive ? `Streamed of ${stream.totalAmount}` : 'Inflow rate'}
+          </p>
+        </div>
+      </div>
+
+      {/* Sparkline */}
+      <div className="mt-5 h-12 w-full">
+        <svg viewBox="0 0 300 50" className="w-full h-full" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="g" x1="0" x2="1">
+              <stop offset="0%" stopColor="#00d4ff" />
+              <stop offset="100%" stopColor="#b05bff" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M0,35 C40,30 60,40 90,28 C120,16 150,38 180,24 C210,12 240,30 300,18"
+            fill="none"
+            stroke="url(#g)"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            opacity="0.85"
+          />
+        </svg>
+      </div>
+    </motion.div>
+  );
+}
+
+function StreamSheet({ isOpen, onClose }) {
+  const [recipient, setRecipient] = useState('');
+  const [amount, setAmount] = useState('');
+  const [duration, setDuration] = useState('1w'); // '1d' | '1w' | '1m'
+  const [status, setStatus] = useState('idle'); // 'idle' | 'starting'
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const isStarting = status === 'starting';
+
+  useEffect(() => {
+    if (!isOpen) {
+      const t = setTimeout(() => {
+        setRecipient('');
+        setAmount('');
+        setDuration('1w');
+        setStatus('idle');
+        setErrorMsg('');
+      }, 350);
+      return () => clearTimeout(t);
+    }
+  }, [isOpen]);
+
+  const durations = [
+    { id: '1d', label: '1 Day', ms: 24 * 60 * 60 * 1000 },
+    { id: '1w', label: '1 Week', ms: 7 * 24 * 60 * 60 * 1000 },
+    { id: '1m', label: '1 Month', ms: 30 * 24 * 60 * 60 * 1000 },
+  ];
+
+  const handleStart = async () => {
+    setErrorMsg('');
+
+    let toPubkey;
+    try {
+      toPubkey = new PublicKey(recipient.trim());
+    } catch {
+      setErrorMsg('Invalid recipient address.');
+      return;
+    }
+
+    const parsedAmount = parseFloat(amount);
+    if (!parsedAmount || parsedAmount <= 0 || Number.isNaN(parsedAmount)) {
+      setErrorMsg('Enter an amount greater than 0.');
+      return;
+    }
+
+    const chosen = durations.find((d) => d.id === duration);
+    setStatus('starting');
+
+    // Simulated provisioning delay (visual prototype only)
+    await new Promise((r) => setTimeout(r, 900));
+
+    streamStore.start({
+      totalAmount: parsedAmount,
+      durationMs: chosen.ms,
+      startedAt: Date.now(),
+      recipient: toPubkey.toBase58(),
+    });
+
+    onClose();
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            key="stream-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            onClick={onClose}
+            className="absolute inset-0 z-30 bg-black/60 backdrop-blur-sm md:rounded-[44px]"
+          />
+
+          <motion.div
+            key="stream-sheet"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 32, stiffness: 320, mass: 0.9 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.4 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+            }}
+            className="absolute bottom-0 left-0 right-0 z-40
+                       bg-[#0a0a0a]/90 backdrop-blur-2xl
+                       border-t border-white/10
+                       rounded-t-3xl
+                       shadow-[0_-30px_80px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)]
+                       px-6 pt-2.5 pb-7
+                       md:rounded-b-[44px]"
+          >
+            <div className="flex justify-center pt-1 pb-3">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] text-white/40 font-medium">
+                  Treasury · Devnet
+                </p>
+                <h2 className="text-[22px] font-light tracking-tight text-white mt-1">
+                  Create Stream
+                </h2>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={onClose}
+                className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </motion.button>
+            </div>
+
+            {/* Recipient */}
+            <div className="mb-5">
+              <label className="text-[10px] uppercase tracking-[0.22em] text-white/40 font-medium">
+                Recipient Address
+              </label>
+              <input
+                type="text"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                placeholder="Solana wallet address"
+                spellCheck={false}
+                autoComplete="off"
+                className="w-full mt-2 bg-transparent text-white text-[14px] font-light
+                           border-b border-white/10 focus:border-cyan-neon/60
+                           outline-none py-2 transition-colors duration-300
+                           placeholder:text-white/25"
+              />
+            </div>
+
+            {/* Amount */}
+            <div className="mb-6">
+              <label className="text-[10px] uppercase tracking-[0.22em] text-white/40 font-medium">
+                Total Amount
+              </label>
+              <div className="flex items-baseline gap-2 mt-2 border-b border-white/10 focus-within:border-purple-electric/60 transition-colors duration-300 pb-2">
+                <span className="text-3xl font-thin text-white/40">◎</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/[^0-9.]/g, '');
+                    if ((v.match(/\./g) || []).length <= 1) setAmount(v);
+                  }}
+                  placeholder="0.00"
+                  className="flex-1 bg-transparent text-white text-3xl font-thin tracking-tight
+                             outline-none placeholder:text-white/20"
+                />
+                <span className="text-[11px] text-white/40 tracking-wide">SOL</span>
+              </div>
+            </div>
+
+            {/* Duration */}
+            <div className="mb-7">
+              <label className="text-[10px] uppercase tracking-[0.22em] text-white/40 font-medium">
+                Duration
+              </label>
+              <div className="grid grid-cols-3 gap-2 mt-2.5">
+                {durations.map((d) => {
+                  const selected = duration === d.id;
+                  return (
+                    <motion.button
+                      key={d.id}
+                      type="button"
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => setDuration(d.id)}
+                      className={`relative h-11 rounded-full text-[12px] font-medium border
+                                  transition-all duration-300
+                                  ${selected
+                                    ? 'bg-gradient-to-r from-cyan-neon/20 to-purple-electric/20 border-cyan-neon/40 text-white shadow-[0_0_24px_rgba(0,212,255,0.25),inset_0_1px_0_rgba(255,255,255,0.12)]'
+                                    : 'bg-white/5 border-white/10 text-white/65 hover:text-white hover:border-white/20'}`}
+                    >
+                      {d.label}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Start button */}
+            <motion.button
+              whileTap={!isStarting ? { scale: 0.97 } : {}}
+              type="button"
+              onClick={handleStart}
+              disabled={isStarting}
+              className={`w-full h-14 rounded-2xl
+                         text-[15px] font-medium text-white
+                         border border-white/15
+                         shadow-[0_10px_40px_rgba(0,212,255,0.35),inset_0_1px_0_rgba(255,255,255,0.25)]
+                         transition-all duration-300
+                         disabled:cursor-not-allowed
+                         inline-flex items-center justify-center gap-2
+                         ${isStarting
+                           ? 'bg-gradient-to-r from-cyan-neon/40 to-purple-electric/40 opacity-90'
+                           : 'bg-gradient-to-r from-cyan-neon/90 to-purple-electric/90 hover:shadow-[0_14px_50px_rgba(176,91,255,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]'}`}
+            >
+              {isStarting ? (
+                <>
+                  <span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  Initializing…
+                </>
+              ) : (
+                <>
+                  <Radio size={15} />
+                  Start Stream
+                </>
+              )}
+            </motion.button>
+
+            {errorMsg ? (
+              <p className="text-center text-[11px] text-red-400/90 mt-3.5 tracking-wide">
+                {errorMsg}
+              </p>
+            ) : (
+              <p className="text-center text-[10px] text-white/30 mt-3.5 tracking-wide">
+                Continuous payment · Devnet preview
+              </p>
+            )}
           </motion.div>
         </>
       )}
