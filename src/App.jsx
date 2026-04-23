@@ -1,8 +1,10 @@
 import './App.css';
 import { motion } from 'framer-motion';
 import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import { useConnection, useWallet } from '@solana/wallet-adapter-react';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 export default function App() {
   const [active, setActive] = useState('home');
@@ -57,6 +59,32 @@ function Header() {
 }
 
 function Dashboard() {
+  const { connection } = useConnection();
+  const { publicKey } = useWallet();
+  const [balance, setBalance] = useState(0);
+
+  useEffect(() => {
+    if (!publicKey) {
+      setBalance(0);
+      return;
+    }
+
+    let cancelled = false;
+    connection
+      .getBalance(publicKey)
+      .then((lamports) => {
+        if (!cancelled) setBalance(lamports / LAMPORTS_PER_SOL);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch balance:', err);
+        if (!cancelled) setBalance(0);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [connection, publicKey]);
+
   return (
     <main className="flex-1 flex flex-col px-5 pt-6 overflow-y-auto pb-32">
       <motion.p
@@ -82,7 +110,7 @@ function Dashboard() {
         className="mt-3 flex items-baseline gap-2"
       >
         <h1 className="shimmer-text text-[64px] leading-none font-thin tracking-tight">
-          $0.00
+          ${balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
         </h1>
         <span className="text-white/50 text-base font-light tracking-wide">AUDD</span>
       </motion.div>
