@@ -4,7 +4,7 @@ import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft, X } from 'lucid
 import { useState, useEffect } from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 
 export default function App() {
   const [active, setActive] = useState('home');
@@ -295,19 +295,75 @@ function BottomNav({ active, setActive }) {
 }
 
 function SendSheet({ isOpen, onClose }) {
+  const { connection } = useConnection();
+  const { publicKey, sendTransaction } = useWallet();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
+  const [status, setStatus] = useState('idle'); // 'idle' | 'sending' | 'sent' | 'error'
+  const [errorMsg, setErrorMsg] = useState('');
 
-  // Lock body scroll while open and reset fields when closed
+  const isSending = status === 'sending';
+  const isSent = status === 'sent';
+
+  // Reset fields when closed
   useEffect(() => {
     if (!isOpen) {
       const t = setTimeout(() => {
         setRecipient('');
         setAmount('');
+        setStatus('idle');
+        setErrorMsg('');
       }, 350);
       return () => clearTimeout(t);
     }
   }, [isOpen]);
+
+  const handleSend = async () => {
+    setErrorMsg('');
+
+    if (!publicKey) {
+      setErrorMsg('Connect a wallet first.');
+      return;
+    }
+
+    let toPubkey;
+    try {
+      toPubkey = new PublicKey(recipient.trim());
+    } catch {
+      setErrorMsg('Invalid recipient address.');
+      return;
+    }
+
+    const parsedAmount = parseFloat(amount);
+    if (!parsedAmount || parsedAmount <= 0 || Number.isNaN(parsedAmount)) {
+      setErrorMsg('Enter an amount greater than 0.');
+      return;
+    }
+
+    try {
+      setStatus('sending');
+      const lamports = Math.round(parsedAmount * LAMPORTS_PER_SOL);
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey,
+          lamports,
+        })
+      );
+
+      const signature = await sendTransaction(transaction, connection);
+      await connection.confirmTransaction(signature, 'confirmed');
+
+      setStatus('sent');
+      setTimeout(() => {
+        onClose();
+      }, 2000);
+    } catch (err) {
+      console.error('Transaction failed:', err);
+      setErrorMsg(err?.message?.slice(0, 120) || 'Transaction rejected.');
+      setStatus('idle');
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -430,22 +486,41 @@ function SendSheet({ isOpen, onClose }) {
 
             {/* Confirm button */}
             <motion.button
-              whileTap={{ scale: 0.97 }}
+              whileTap={!isSending && !isSent ? { scale: 0.97 } : {}}
               type="button"
-              className="w-full h-14 rounded-2xl
+              onClick={handleSend}
+              disabled={isSending || isSent}
+              className={`w-full h-14 rounded-2xl
                          text-[15px] font-medium text-white
-                         bg-gradient-to-r from-cyan-neon/90 to-purple-electric/90
                          border border-white/15
                          shadow-[0_10px_40px_rgba(0,212,255,0.35),inset_0_1px_0_rgba(255,255,255,0.25)]
-                         transition-shadow duration-300
-                         hover:shadow-[0_14px_50px_rgba(176,91,255,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]"
+                         transition-all duration-300
+                         disabled:cursor-not-allowed
+                         ${isSent
+                           ? 'bg-gradient-to-r from-emerald-400/90 to-cyan-neon/90 shadow-[0_10px_40px_rgba(16,185,129,0.4)]'
+                           : isSending
+                             ? 'bg-gradient-to-r from-cyan-neon/40 to-purple-electric/40 opacity-90'
+                             : 'bg-gradient-to-r from-cyan-neon/90 to-purple-electric/90 hover:shadow-[0_14px_50px_rgba(176,91,255,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]'}`}
             >
-              Confirm Send
+              {isSending && (
+                <span className="inline-flex items-center gap-2">
+                  <span className="w-3.5 h-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  Confirming...
+                </span>
+              )}
+              {isSent && 'Sent!'}
+              {!isSending && !isSent && 'Confirm Send'}
             </motion.button>
 
-            <p className="text-center text-[10px] text-white/30 mt-3.5 tracking-wide">
-              Hold to confirm · Devnet
-            </p>
+            {errorMsg ? (
+              <p className="text-center text-[11px] text-red-400/90 mt-3.5 tracking-wide">
+                {errorMsg}
+              </p>
+            ) : (
+              <p className="text-center text-[10px] text-white/30 mt-3.5 tracking-wide">
+                Hold to confirm · Devnet
+              </p>
+            )}
           </motion.div>
         </>
       )}
