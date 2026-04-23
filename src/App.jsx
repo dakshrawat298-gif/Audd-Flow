@@ -1,6 +1,6 @@
 import './App.css';
-import { motion } from 'framer-motion';
-import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
@@ -31,6 +31,8 @@ export default function App() {
           <Dashboard />
           <BottomNav active={active} setActive={setActive} />
         </div>
+
+        <SendSheetMount />
       </div>
     </div>
   );
@@ -56,6 +58,20 @@ function Header() {
       </div>
     </motion.header>
   );
+}
+
+// ----- Send sheet open/close shared across the app via a tiny event bus -----
+const sendSheetBus = {
+  listeners: new Set(),
+  open() { this.listeners.forEach((fn) => fn(true)); },
+  close() { this.listeners.forEach((fn) => fn(false)); },
+  subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
+};
+
+function SendSheetMount() {
+  const [isSendOpen, setIsSendOpen] = useState(false);
+  useEffect(() => sendSheetBus.subscribe(setIsSendOpen), []);
+  return <SendSheet isOpen={isSendOpen} onClose={() => setIsSendOpen(false)} />;
 }
 
 function Dashboard() {
@@ -123,7 +139,7 @@ function Dashboard() {
       >
         <span className="inline-flex items-center gap-1 text-[11px] text-cyan-neon">
           <span className="w-1.5 h-1.5 rounded-full bg-cyan-neon shadow-[0_0_8px_#00d4ff] animate-pulse" />
-          Live · Solana Mainnet
+          Live · Solana Devnet
         </span>
       </motion.div>
 
@@ -135,12 +151,13 @@ function Dashboard() {
         className="grid grid-cols-3 gap-3 mt-7"
       >
         {[
-          { label: 'Deposit', icon: ArrowDownLeft, color: 'text-cyan-neon' },
-          { label: 'Send', icon: ArrowUpRight, color: 'text-purple-electric' },
-          { label: 'Stream', icon: Radio, color: 'text-white' },
-        ].map(({ label, icon: Icon, color }) => (
+          { label: 'Deposit', icon: ArrowDownLeft, color: 'text-cyan-neon', onClick: () => {} },
+          { label: 'Send', icon: ArrowUpRight, color: 'text-purple-electric', onClick: () => sendSheetBus.open() },
+          { label: 'Stream', icon: Radio, color: 'text-white', onClick: () => {} },
+        ].map(({ label, icon: Icon, color, onClick }) => (
           <motion.button
             key={label}
+            onClick={onClick}
             whileTap={{ scale: 0.95 }}
             className="glass rounded-2xl py-3.5 flex flex-col items-center gap-1.5"
           >
@@ -274,5 +291,164 @@ function BottomNav({ active, setActive }) {
         );
       })}
     </motion.nav>
+  );
+}
+
+function SendSheet({ isOpen, onClose }) {
+  const [recipient, setRecipient] = useState('');
+  const [amount, setAmount] = useState('');
+
+  // Lock body scroll while open and reset fields when closed
+  useEffect(() => {
+    if (!isOpen) {
+      const t = setTimeout(() => {
+        setRecipient('');
+        setAmount('');
+      }, 350);
+      return () => clearTimeout(t);
+    }
+  }, [isOpen]);
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            key="send-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            onClick={onClose}
+            className="absolute inset-0 z-30 bg-black/60 backdrop-blur-sm md:rounded-[44px]"
+          />
+
+          {/* Bottom sheet */}
+          <motion.div
+            key="send-sheet"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 32, stiffness: 320, mass: 0.9 }}
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.4 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 600) onClose();
+            }}
+            className="absolute bottom-0 left-0 right-0 z-40
+                       bg-[#0a0a0a]/90 backdrop-blur-2xl
+                       border-t border-white/10
+                       rounded-t-3xl
+                       shadow-[0_-30px_80px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.06)]
+                       px-6 pt-2.5 pb-7
+                       md:rounded-b-[44px]"
+          >
+            {/* Drag handle */}
+            <div className="flex justify-center pt-1 pb-3">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] text-white/40 font-medium">
+                  Treasury · Devnet
+                </p>
+                <h2 className="text-[22px] font-light tracking-tight text-white mt-1">
+                  Send Funds
+                </h2>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={onClose}
+                className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </motion.button>
+            </div>
+
+            {/* Recipient field */}
+            <div className="mb-5">
+              <label className="text-[10px] uppercase tracking-[0.22em] text-white/40 font-medium">
+                Recipient Address
+              </label>
+              <input
+                type="text"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                placeholder="Solana wallet address"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
+                className="mt-2 w-full bg-transparent border-b border-white/10
+                           focus:border-cyan-neon/60 transition-colors duration-300
+                           text-white placeholder:text-white/25
+                           text-[15px] font-light tracking-wide
+                           py-2.5 outline-none"
+              />
+            </div>
+
+            {/* Amount field */}
+            <div className="mb-7">
+              <div className="flex items-baseline justify-between">
+                <label className="text-[10px] uppercase tracking-[0.22em] text-white/40 font-medium">
+                  Amount
+                </label>
+                <span className="text-[10px] text-white/30">AUDD</span>
+              </div>
+              <div className="mt-2 flex items-baseline gap-2 border-b border-white/10 focus-within:border-purple-electric/60 transition-colors duration-300 py-1.5">
+                <span className="text-white/40 text-2xl font-thin">$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/[^0-9.]/g, '');
+                    setAmount(v);
+                  }}
+                  placeholder="0.00"
+                  className="flex-1 bg-transparent text-white placeholder:text-white/25
+                             text-[34px] font-thin tracking-tight
+                             py-1 outline-none min-w-0"
+                />
+              </div>
+              <div className="flex justify-end mt-2 gap-2">
+                {['25%', '50%', 'Max'].map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/60 hover:text-white hover:border-white/20 transition-colors"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Confirm button */}
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              type="button"
+              className="w-full h-14 rounded-2xl
+                         text-[15px] font-medium text-white
+                         bg-gradient-to-r from-cyan-neon/90 to-purple-electric/90
+                         border border-white/15
+                         shadow-[0_10px_40px_rgba(0,212,255,0.35),inset_0_1px_0_rgba(255,255,255,0.25)]
+                         transition-shadow duration-300
+                         hover:shadow-[0_14px_50px_rgba(176,91,255,0.45),inset_0_1px_0_rgba(255,255,255,0.3)]"
+            >
+              Confirm Send
+            </motion.button>
+
+            <p className="text-center text-[10px] text-white/30 mt-3.5 tracking-wide">
+              Hold to confirm · Devnet
+            </p>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
