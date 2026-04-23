@@ -75,6 +75,21 @@ const sendSheetBus = createSheetBus();
 const depositSheetBus = createSheetBus();
 const streamSheetBus = createSheetBus();
 
+// ----- Activity log store (in-memory ledger) -----
+const activityStore = {
+  log: [],
+  listeners: new Set(),
+  add(entry) {
+    this.log = [entry, ...this.log].slice(0, 50);
+    this.listeners.forEach((fn) => fn(this.log));
+  },
+  subscribe(fn) {
+    this.listeners.add(fn);
+    fn(this.log);
+    return () => this.listeners.delete(fn);
+  },
+};
+
 // ----- Active stream store (visual prototype only) -----
 const streamStore = {
   stream: null, // { totalAmount, durationMs, startedAt, recipient }
@@ -208,25 +223,8 @@ function Dashboard() {
       {/* Stream stats card */}
       <ActiveStreamsCard />
 
-      {/* Recent activity placeholder */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.85, duration: 0.7 }}
-        className="mt-5"
-      >
-        <p className="text-[11px] uppercase tracking-[0.28em] text-white/40 font-medium px-1">
-          Recent Activity
-        </p>
-        <div className="glass mt-2.5 rounded-2xl p-5 text-center">
-          <p className="text-white/50 text-[13px] font-light">
-            No transactions yet
-          </p>
-          <p className="text-white/30 text-[11px] mt-1">
-            Connect a wallet to begin
-          </p>
-        </div>
-      </motion.div>
+      {/* Recent activity */}
+      <RecentActivityCard />
     </main>
   );
 }
@@ -343,6 +341,15 @@ function SendSheet({ isOpen, onClose }) {
       const signature = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(signature, 'confirmed');
 
+      const addr = toPubkey.toBase58();
+      activityStore.add({
+        id: Date.now(),
+        type: 'Sent',
+        amount: parsedAmount,
+        address: addr.slice(0, 4) + '...' + addr.slice(-4),
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+
       setStatus('sent');
       setTimeout(() => {
         onClose();
@@ -431,7 +438,7 @@ function SendSheet({ isOpen, onClose }) {
                 className="mt-2 w-full bg-transparent border-b border-white/10
                            focus:border-cyan-neon/60 transition-colors duration-300
                            text-white placeholder:text-white/25
-                           text-[15px] font-light tracking-wide
+                           text-[16px] font-light tracking-wide
                            py-2.5 outline-none"
               />
             </div>
@@ -830,11 +837,20 @@ function StreamSheet({ isOpen, onClose }) {
     // Simulated provisioning delay (visual prototype only)
     await new Promise((r) => setTimeout(r, 900));
 
+    const recipientAddr = toPubkey.toBase58();
     streamStore.start({
       totalAmount: parsedAmount,
       durationMs: chosen.ms,
       startedAt: Date.now(),
-      recipient: toPubkey.toBase58(),
+      recipient: recipientAddr,
+    });
+
+    activityStore.add({
+      id: Date.now(),
+      type: 'Streaming',
+      amount: parsedAmount,
+      address: recipientAddr.slice(0, 4) + '...' + recipientAddr.slice(-4),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
 
     onClose();
@@ -909,7 +925,7 @@ function StreamSheet({ isOpen, onClose }) {
                 placeholder="Solana wallet address"
                 spellCheck={false}
                 autoComplete="off"
-                className="w-full mt-2 bg-transparent text-white text-[14px] font-light
+                className="w-full mt-2 bg-transparent text-white text-[16px] font-light
                            border-b border-white/10 focus:border-cyan-neon/60
                            outline-none py-2 transition-colors duration-300
                            placeholder:text-white/25"
@@ -1009,5 +1025,78 @@ function StreamSheet({ isOpen, onClose }) {
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+function RecentActivityCard() {
+  const [log, setLog] = useState([]);
+  useEffect(() => activityStore.subscribe(setLog), []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.85, duration: 0.7 }}
+      className="mt-5"
+    >
+      <p className="text-[11px] uppercase tracking-[0.28em] text-white/40 font-medium px-1">
+        Recent Activity
+      </p>
+
+      {log.length === 0 ? (
+        <div className="glass mt-2.5 rounded-2xl p-5 text-center">
+          <p className="text-white/50 text-[13px] font-light">
+            No transactions yet
+          </p>
+          <p className="text-white/30 text-[11px] mt-1">
+            Connect a wallet to begin
+          </p>
+        </div>
+      ) : (
+        <div className="glass mt-2.5 rounded-2xl divide-y divide-white/5 overflow-hidden">
+          <AnimatePresence initial={false}>
+            {log.map((item) => {
+              const isStream = item.type === 'Streaming';
+              const Icon = isStream ? Radio : ArrowUpRight;
+              const accent = isStream ? 'text-cyan-neon' : 'text-purple-electric';
+              const ring = isStream
+                ? 'bg-cyan-neon/10 border-cyan-neon/25'
+                : 'bg-purple-electric/10 border-purple-electric/25';
+
+              return (
+                <motion.div
+                  key={item.id}
+                  layout
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+                  className="flex items-center gap-3 px-4 py-3.5"
+                >
+                  <div className={`w-9 h-9 rounded-full border flex items-center justify-center ${ring}`}>
+                    <Icon size={15} className={accent} strokeWidth={2} />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] text-white font-medium leading-tight">
+                      {item.type}
+                    </p>
+                    <p className="text-[11px] text-white/40 mt-0.5 font-light tabular-nums">
+                      {item.address} · {item.time}
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <p className={`text-[13px] font-medium tabular-nums ${accent}`}>
+                      {isStream ? '' : '−'}{item.amount} <span className="text-white/40 text-[10px] tracking-wide ml-0.5">AUDD</span>
+                    </p>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
+    </motion.div>
   );
 }
