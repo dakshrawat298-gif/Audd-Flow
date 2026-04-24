@@ -1,6 +1,6 @@
 import './App.css';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft, X, QrCode, Copy, Check } from 'lucide-react';
+import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft, X, QrCode, Copy, Check, ExternalLink } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
@@ -77,7 +77,7 @@ function Header() {
         </span>
       </div>
 
-      <div className="audd-wallet-btn">
+      <div className="audd-wallet-btn relative z-50">
         <WalletMultiButton startIcon={<Wallet size={13} className="text-cyan-neon" />} />
       </div>
     </motion.header>
@@ -381,6 +381,7 @@ function SendSheet({ isOpen, onClose }) {
         amount: parsedAmount,
         address: addr.slice(0, 4) + '...' + addr.slice(-4),
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        signature,
       });
 
       toast.success(`Sent ${parsedAmount} SOL`, { id: toastId });
@@ -1111,15 +1112,28 @@ function RecentActivityCard() {
                 ? 'bg-cyan-neon/10 border-cyan-neon/25'
                 : 'bg-purple-electric/10 border-purple-electric/25';
 
+              const hasLink = Boolean(item.signature);
+              const RowTag = hasLink ? motion.a : motion.div;
+              const linkProps = hasLink
+                ? {
+                    href: `https://solscan.io/tx/${item.signature}?cluster=devnet`,
+                    target: '_blank',
+                    rel: 'noopener noreferrer',
+                  }
+                : {};
+
               return (
-                <motion.div
+                <RowTag
                   key={item.id}
                   layout
                   initial={{ opacity: 0, y: -8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-                  className="flex items-center gap-3 px-4 py-3.5"
+                  {...linkProps}
+                  className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${
+                    hasLink ? 'hover:bg-white/5 cursor-pointer' : ''
+                  }`}
                 >
                   <div className={`w-9 h-9 rounded-full border flex items-center justify-center ${ring}`}>
                     <Icon size={15} className={accent} strokeWidth={2} />
@@ -1139,7 +1153,15 @@ function RecentActivityCard() {
                       {isStream ? '' : '−'}{item.amount} <span className="text-white/40 text-[10px] tracking-wide ml-0.5">AUDD</span>
                     </p>
                   </div>
-                </motion.div>
+
+                  {hasLink && (
+                    <ExternalLink
+                      size={13}
+                      className="text-white/30 ml-1 shrink-0"
+                      strokeWidth={1.8}
+                    />
+                  )}
+                </RowTag>
               );
             })}
           </AnimatePresence>
