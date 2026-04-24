@@ -8,8 +8,6 @@ import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from '@solana
 import toast, { Toaster } from 'react-hot-toast';
 
 export default function App() {
-  const [active, setActive] = useState('home');
-
   return (
     <div className="h-screen w-screen flex items-center justify-center bg-black overflow-hidden">
       {/* iPhone-style mobile frame */}
@@ -30,7 +28,6 @@ export default function App() {
         <div className="relative z-10 h-full flex flex-col">
           <Header />
           <Dashboard />
-          <BottomNav active={active} setActive={setActive} />
         </div>
 
         <SendSheetMount />
@@ -68,7 +65,7 @@ function Header() {
       initial={{ y: -30, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-      className="glass mx-4 mt-3 px-4 py-3 rounded-2xl flex items-center justify-between"
+      className="relative z-[100] glass mx-4 mt-3 px-4 py-3 rounded-2xl flex items-center justify-between"
     >
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-neon to-purple-electric shadow-[0_0_24px_rgba(0,212,255,0.55)]" />
@@ -183,7 +180,7 @@ function Dashboard() {
   }, [connection, publicKey]);
 
   return (
-    <main className="flex-1 flex flex-col px-5 pt-6 overflow-y-auto pb-32">
+    <main className="flex-1 flex flex-col px-5 pt-6 overflow-y-auto pb-6">
       <motion.p
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -254,58 +251,6 @@ function Dashboard() {
       {/* Recent activity */}
       <RecentActivityCard />
     </main>
-  );
-}
-
-function BottomNav({ active, setActive }) {
-  const items = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'send', label: 'Send', icon: Send },
-    { id: 'stream', label: 'Stream', icon: Radio },
-  ];
-
-  return (
-    <motion.nav
-      initial={{ y: 60, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ delay: 0.3, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-      className="absolute bottom-4 left-4 right-4 glass rounded-3xl px-3 py-2.5 flex justify-around z-20"
-    >
-      {items.map(({ id, label, icon: Icon }) => {
-        const isActive = active === id;
-        return (
-          <motion.button
-            key={id}
-            onClick={() => setActive(id)}
-            whileTap={{ scale: 0.9 }}
-            className="relative flex flex-col items-center gap-1 py-1.5 px-5 rounded-2xl"
-          >
-            {isActive && (
-              <motion.div
-                layoutId="navPill"
-                className="absolute inset-0 rounded-2xl bg-white/8 border border-white/10
-                           shadow-[inset_0_0_20px_rgba(0,212,255,0.12)]"
-                transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-              />
-            )}
-            <Icon
-              size={20}
-              className={`relative z-10 transition-colors ${
-                isActive ? 'text-cyan-neon' : 'text-white/55'
-              }`}
-              strokeWidth={isActive ? 2.2 : 1.7}
-            />
-            <span
-              className={`relative z-10 text-[10px] font-medium transition-colors ${
-                isActive ? 'text-white' : 'text-white/45'
-              }`}
-            >
-              {label}
-            </span>
-          </motion.button>
-        );
-      })}
-    </motion.nav>
   );
 }
 
