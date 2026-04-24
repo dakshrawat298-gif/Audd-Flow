@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function App() {
   const [active, setActive] = useState('home');
@@ -36,9 +37,30 @@ export default function App() {
         <DepositSheetMount />
         <StreamSheetMount />
       </div>
+
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: '#111',
+            color: '#fff',
+            border: '1px solid rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(10px)',
+          },
+        }}
+      />
     </div>
   );
 }
+
+// ----- Balance refresh bus (lets sheets trigger Dashboard to refetch) -----
+const balanceBus = (() => {
+  const listeners = new Set();
+  return {
+    refresh: () => listeners.forEach((fn) => fn()),
+    subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
+  };
+})();
 
 function Header() {
   return (
@@ -139,18 +161,24 @@ function Dashboard() {
     }
 
     let cancelled = false;
-    connection
-      .getBalance(publicKey)
-      .then((lamports) => {
-        if (!cancelled) setBalance(lamports / LAMPORTS_PER_SOL);
-      })
-      .catch((err) => {
-        console.error('Failed to fetch balance:', err);
-        if (!cancelled) setBalance(0);
-      });
+
+    const fetchBalance = () => {
+      connection
+        .getBalance(publicKey)
+        .then((lamports) => {
+          if (!cancelled) setBalance(lamports / LAMPORTS_PER_SOL);
+        })
+        .catch((err) => {
+          console.error('Failed to fetch balance:', err);
+        });
+    };
+
+    fetchBalance();
+    const unsubscribe = balanceBus.subscribe(fetchBalance);
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [connection, publicKey]);
 
@@ -310,6 +338,7 @@ function SendSheet({ isOpen, onClose }) {
 
     if (!publicKey) {
       setErrorMsg('Connect a wallet first.');
+      toast.error('Connect a wallet first.');
       return;
     }
 
@@ -318,14 +347,18 @@ function SendSheet({ isOpen, onClose }) {
       toPubkey = new PublicKey(recipient.trim());
     } catch {
       setErrorMsg('Invalid recipient address.');
+      toast.error('Invalid recipient address.');
       return;
     }
 
     const parsedAmount = parseFloat(amount);
     if (!parsedAmount || parsedAmount <= 0 || Number.isNaN(parsedAmount)) {
       setErrorMsg('Enter an amount greater than 0.');
+      toast.error('Enter an amount greater than 0.');
       return;
     }
+
+    const toastId = toast.loading('Sending transaction...');
 
     try {
       setStatus('sending');
@@ -350,13 +383,28 @@ function SendSheet({ isOpen, onClose }) {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       });
 
+      toast.success(`Sent ${parsedAmount} SOL`, { id: toastId });
+
+      // Instantly re-fetch balance so the UI numbers drop without a refresh.
+      try {
+        const newLamports = await connection.getBalance(publicKey);
+        balanceBus.refresh(); // notify Dashboard listener too
+        // (Dashboard's listener will re-query; we already have the value above
+        //  to ensure freshness even if the listener is delayed.)
+        void newLamports;
+      } catch (refreshErr) {
+        console.error('Balance refresh failed:', refreshErr);
+      }
+
       setStatus('sent');
       setTimeout(() => {
         onClose();
       }, 2000);
     } catch (err) {
       console.error('Transaction failed:', err);
-      setErrorMsg(err?.message?.slice(0, 120) || 'Transaction rejected.');
+      const msg = err?.message?.slice(0, 120) || 'Transaction rejected.';
+      setErrorMsg(msg);
+      toast.error(msg, { id: toastId });
       setStatus('idle');
     }
   };
