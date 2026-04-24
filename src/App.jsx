@@ -1,7 +1,7 @@
 import './App.css';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft, X, QrCode, Copy, Check, ExternalLink } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
@@ -150,6 +150,42 @@ function Dashboard() {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
   const [balance, setBalance] = useState(0);
+  const wasConnectedRef = useRef(false);
+
+  // Premium connect/disconnect toasts + stream state cleanup on disconnect.
+  useEffect(() => {
+    const isConnected = Boolean(publicKey);
+    const wasConnected = wasConnectedRef.current;
+
+    if (isConnected && !wasConnected) {
+      toast.success('Wallet connected successfully', {
+        icon: '🟢',
+        style: {
+          borderRadius: '100px',
+          background: '#111',
+          color: '#fff',
+          border: '1px solid rgba(255,255,255,0.1)',
+        },
+      });
+    } else if (!isConnected && wasConnected) {
+      toast('Wallet disconnected', {
+        icon: '🔌',
+        style: {
+          borderRadius: '100px',
+          background: '#111',
+          color: '#fff',
+          border: '1px solid rgba(255,255,255,0.1)',
+        },
+      });
+
+      // Stop any active stream — this nulls streamStore.stream, which causes
+      // ActiveStreamsCard's effect to clear its setInterval and reset the
+      // displayed numbers back to 0.000000.
+      streamStore.stop();
+    }
+
+    wasConnectedRef.current = isConnected;
+  }, [publicKey]);
 
   useEffect(() => {
     if (!publicKey) {
