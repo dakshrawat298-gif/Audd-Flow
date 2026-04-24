@@ -23,8 +23,8 @@ Current Web3 treasuries are clunky and feel like Excel spreadsheets. **Audd Flow
 graph TD
     A[Mobile Client / User] -->|Taps Send| B(Glassmorphism UI)
     B -->|Requests Approval| C{Wallet Adapter}
-    C -->|Phantom/Solflare| D[Transaction Builder]
-    D -->|@solana/spl-token| E[(Solana Devnet)]
+    C -->|Phantom or Solflare| D[Transaction Builder]
+    D -->|SPL-Token Program| E[(Solana Devnet)]
     E -->|Success Signature| F[State Manager]
     F -->|Instant Render| G[Live Treasury Balance]
     F -->|Verified Link| H[Solscan Activity Ledger]
@@ -33,7 +33,7 @@ graph TD
 ## 🛠 Tech Stack
  * **Frontend:** React, Vite, Tailwind CSS (Custom Dark Glass Theme)
  * **Animations:** Framer Motion
- * **Web3 Engine:** @solana/web3.js, @solana/spl-token
+ * **Web3 Engine:** Solana Web3.js, SPL-Token
  * **Wallet Connection:** Solana Wallet Adapter
  * **UX Enhancements:** React Hot Toast, Lucide Icons
 
