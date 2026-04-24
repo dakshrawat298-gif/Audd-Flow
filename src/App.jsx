@@ -4,12 +4,8 @@ import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft, X, QrCode, Copy
 import { useState, useEffect, useRef } from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { LAMPORTS_PER_SOL, PublicKey, Transaction } from '@solana/web3.js';
-import { getAssociatedTokenAddress, createTransferInstruction } from '@solana/spl-token';
+import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
 import toast, { Toaster } from 'react-hot-toast';
-
-// Devnet AUDD test mint (6 decimals).
-const AUDD_MINT = new PublicKey('4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU');
 
 export default function App() {
   return (
@@ -327,9 +323,9 @@ function SendSheet({ isOpen, onClose }) {
       return;
     }
 
-    let parsedRecipient;
+    let toPubkey;
     try {
-      parsedRecipient = new PublicKey(recipient.trim());
+      toPubkey = new PublicKey(recipient.trim());
     } catch {
       setErrorMsg('Invalid recipient address.');
       toast.error('Invalid recipient address.');
@@ -347,25 +343,19 @@ function SendSheet({ isOpen, onClose }) {
 
     try {
       setStatus('sending');
-
-      // Resolve associated token accounts for sender + recipient.
-      const senderATA = await getAssociatedTokenAddress(AUDD_MINT, publicKey);
-      const recipientATA = await getAssociatedTokenAddress(AUDD_MINT, parsedRecipient);
-
-      // AUDD on devnet uses 6 decimals.
+      const lamports = Math.round(parsedAmount * LAMPORTS_PER_SOL);
       const transaction = new Transaction().add(
-        createTransferInstruction(
-          senderATA,
-          recipientATA,
-          publicKey,
-          Math.round(parsedAmount * 1_000_000)
-        )
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey,
+          lamports,
+        })
       );
 
       const signature = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(signature, 'confirmed');
 
-      const addr = parsedRecipient.toBase58();
+      const addr = toPubkey.toBase58();
       activityStore.add({
         id: Date.now(),
         type: 'Sent',
