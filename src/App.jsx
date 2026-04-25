@@ -4,7 +4,7 @@ import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft, X, QrCode, Copy
 import { useState, useEffect, useRef } from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { LAMPORTS_PER_SOL, PublicKey, Transaction } from '@solana/web3.js';
+import { PublicKey, Transaction } from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
   createTransferInstruction,
@@ -203,15 +203,28 @@ function Dashboard() {
 
     let cancelled = false;
 
-    const fetchBalance = () => {
-      connection
-        .getBalance(publicKey)
-        .then((lamports) => {
-          if (!cancelled) setBalance(lamports / LAMPORTS_PER_SOL);
-        })
-        .catch((err) => {
-          console.error('Failed to fetch balance:', err);
-        });
+    const fetchBalance = async () => {
+      try {
+        // Resolve the user's AUDD associated token account on devnet.
+        const userATA = await getAssociatedTokenAddress(AUDD_MINT, publicKey);
+
+        // getTokenAccountBalance throws if the ATA does not exist on-chain
+        // (fresh wallet that has never received AUDD). We treat that as 0.
+        const resp = await connection.getTokenAccountBalance(userATA);
+        if (cancelled) return;
+
+        const ui =
+          typeof resp?.value?.uiAmount === 'number'
+            ? resp.value.uiAmount
+            : Number(resp?.value?.amount ?? 0) /
+              Math.pow(10, resp?.value?.decimals ?? 6);
+
+        setBalance(Number.isFinite(ui) ? ui : 0);
+      } catch (err) {
+        // Most common cause: ATA doesn't exist yet — show 0 instead of crashing.
+        if (!cancelled) setBalance(0);
+        console.warn('AUDD balance unavailable, defaulting to 0:', err?.message || err);
+      }
     };
 
     fetchBalance();
