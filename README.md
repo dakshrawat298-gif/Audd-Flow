@@ -43,7 +43,7 @@ To maintain 100% technical transparency for the SolAUDD Grant judges:
  * **Phase 2 (Upcoming):** The current "Active Streams" dashboard is a high-fidelity visual prototype to demonstrate the target UX. Post-grant, this will be integrated with complex streaming smart contracts (e.g., Streamflow/Zebec) for real-time continuous payroll.
 
 ## 🔗 Official Links
- * **Live App (Vercel):** [Insert Your Vercel Link Here]
- * **Pitch Video:** [Insert Your Twitter/YouTube Link Here]
+ * **Live App (Vercel):** [https://audd-flow.vercel.app]
+ * **Pitch Video:** [https://youtube.com/shorts/-KrWxH6ybHw?si=SXLPBRaH5Ve6rOzs]
 
 *Built with passion for the SolAUDD ecosystem.*
