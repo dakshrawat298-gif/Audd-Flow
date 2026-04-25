@@ -4,8 +4,16 @@ import { Home, Send, Radio, Wallet, ArrowUpRight, ArrowDownLeft, X, QrCode, Copy
 import { useState, useEffect, useRef } from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL, PublicKey, Transaction } from '@solana/web3.js';
+import {
+  getAssociatedTokenAddress,
+  createTransferInstruction,
+  createAssociatedTokenAccountInstruction,
+} from '@solana/spl-token';
 import toast, { Toaster } from 'react-hot-toast';
+
+// Devnet AUDD test mint (6 decimals).
+const AUDD_MINT = new PublicKey('Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr');
 
 export default function App() {
   return (
@@ -323,9 +331,9 @@ function SendSheet({ isOpen, onClose }) {
       return;
     }
 
-    let toPubkey;
+    let parsedRecipient;
     try {
-      toPubkey = new PublicKey(recipient.trim());
+      parsedRecipient = new PublicKey(recipient.trim());
     } catch {
       setErrorMsg('Invalid recipient address.');
       toast.error('Invalid recipient address.');
@@ -343,19 +351,42 @@ function SendSheet({ isOpen, onClose }) {
 
     try {
       setStatus('sending');
-      const lamports = Math.round(parsedAmount * LAMPORTS_PER_SOL);
-      const transaction = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: publicKey,
-          toPubkey,
-          lamports,
-        })
+
+      // Resolve associated token accounts for sender + recipient.
+      const senderATA = await getAssociatedTokenAddress(AUDD_MINT, publicKey);
+      const recipientATA = await getAssociatedTokenAddress(AUDD_MINT, parsedRecipient);
+
+      const transaction = new Transaction();
+
+      // Pre-check: if the recipient ATA does not exist on-chain yet,
+      // prepend an instruction to create it (sender pays the rent).
+      // This prevents crashes when sending to a fresh wallet.
+      const recipientATAInfo = await connection.getAccountInfo(recipientATA);
+      if (!recipientATAInfo) {
+        transaction.add(
+          createAssociatedTokenAccountInstruction(
+            publicKey,        // payer
+            recipientATA,     // ATA to create
+            parsedRecipient,  // owner of the new ATA
+            AUDD_MINT
+          )
+        );
+      }
+
+      // AUDD on devnet uses 6 decimals.
+      transaction.add(
+        createTransferInstruction(
+          senderATA,
+          recipientATA,
+          publicKey,
+          Math.round(parsedAmount * 1_000_000)
+        )
       );
 
       const signature = await sendTransaction(transaction, connection);
       await connection.confirmTransaction(signature, 'confirmed');
 
-      const addr = toPubkey.toBase58();
+      const addr = parsedRecipient.toBase58();
       activityStore.add({
         id: Date.now(),
         type: 'Sent',
